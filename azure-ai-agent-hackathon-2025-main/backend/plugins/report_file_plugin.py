@@ -20,28 +20,20 @@ except ImportError:
     print("Spire.Doc.Free not available. Install with: pip install Spire.Doc.Free")
     SPIRE_DOC_AVAILABLE = False
 
-# Import Azure storage modules
-try:
-    from azure.storage.blob import BlobServiceClient, ContentSettings
-    from azure.identity import DefaultAzureCredential
-    AZURE_STORAGE_AVAILABLE = True
-except ImportError:
-    print("Azure Storage SDK not available. Uploads to data lake will not work.")
-    AZURE_STORAGE_AVAILABLE = False
+# Supabase Storage is accessed through the supabase client
+SUPABASE_STORAGE_AVAILABLE = True
 
 class ReportFilePlugin:
-    """A plugin for creating Word reports and uploading them to data lake."""
+    """A plugin for creating Word reports and uploading them to Supabase Storage."""
     
-    def __init__(self, connection_string, storage_connection_string=None):
-        """Initialize the plugin with improved error handling.
+    def __init__(self, connection_string=None, storage_connection_string=None):
+        """Initialize the plugin with Supabase Storage support.
         
         Args:
-            connection_string: Database connection string
-            storage_connection_string: Optional storage connection string
+            connection_string: Legacy parameter, not used
+            storage_connection_string: Legacy parameter, not used
         """
-        self.connection_string = connection_string
-        self.storage_connection_string = storage_connection_string or os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-        self.storage_container = os.getenv("AZURE_STORAGE_CONTAINER", "procurement-expediting-risk-reports")
+        self.storage_bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "risk-reports")
         self.report_directory = os.getenv("REPORT_STORAGE_PATH", "reports")
         
         # Create report directory if it doesn't exist
@@ -54,26 +46,23 @@ class ReportFilePlugin:
             # Use a default that should always work
             self.report_directory = "."
         
-        # Initialize blob service client
-        self.blob_service_client = None
-        if AZURE_STORAGE_AVAILABLE:
+        # Initialize Supabase storage client
+        self.supabase_client = None
+        try:
+            self.supabase_client = get_connection()
+            # Ensure the storage bucket exists
             try:
-                if self.storage_connection_string:
-                    try:
-                        self.blob_service_client = BlobServiceClient.from_connection_string(self.storage_connection_string)
-                        print("Initialized blob service client from connection string")
-                    except Exception as e:
-                        print(f"Error initializing blob service client from connection string: {e}")
-                elif os.getenv("AZURE_STORAGE_ACCOUNT_NAME"):
-                    try:
-                        credential = DefaultAzureCredential()
-                        account_url = f"https://{os.getenv('AZURE_STORAGE_ACCOUNT_NAME')}.blob.core.windows.net"
-                        self.blob_service_client = BlobServiceClient(account_url, credential=credential)
-                        print("Initialized blob service client from Azure credentials")
-                    except Exception as e:
-                        print(f"Error initializing blob service client from Azure credentials: {e}")
-            except Exception as e:
-                print(f"Error initializing blob service client: {e}")
+                self.supabase_client.storage.get_bucket(self.storage_bucket)
+                print(f"Using existing storage bucket: {self.storage_bucket}")
+            except Exception:
+                try:
+                    self.supabase_client.storage.create_bucket(self.storage_bucket, options={"public": False})
+                    print(f"Created storage bucket: {self.storage_bucket}")
+                except Exception as bucket_error:
+                    print(f"Could not create storage bucket (may already exist): {bucket_error}")
+        except Exception as e:
+            print(f"Error initializing Supabase Storage: {e}")
+            SUPABASE_STORAGE_AVAILABLE = False
     
     def save_report_to_file(self, report_content: str, session_id: str, 
                           conversation_id: str, report_title: str = None) -> str:
@@ -151,20 +140,20 @@ class ReportFilePlugin:
                     except Exception as e:
                         print(f"Error deleting temporary markdown file: {e}")
             
-            # Upload to data lake with detailed error handling
+            # Upload to Supabase Storage with detailed error handling
             blob_url = None
             try:
-                if self.blob_service_client and AZURE_STORAGE_AVAILABLE:
-                    print(f"Uploading to data lake...")
-                    blob_url = self._upload_to_data_lake(docx_filepath, docx_filename)
-                    print(f"Successfully uploaded to data lake: {blob_url}")
+                if self.supabase_client and SUPABASE_STORAGE_AVAILABLE:
+                    print(f"Uploading to Supabase Storage...")
+                    blob_url = self._upload_to_storage(docx_filepath, docx_filename)
+                    print(f"Successfully uploaded to storage: {blob_url}")
                 else:
-                    print("No blob service client available, skipping upload")
+                    print("No Supabase client available, skipping upload")
                     # Use a local file URL as fallback
                     blob_url = f"file://{os.path.abspath(docx_filepath)}"
                     print(f"Using local file URL: {blob_url}")
             except Exception as upload_error:
-                print(f"Error uploading to data lake: {upload_error}")
+                print(f"Error uploading to Supabase Storage: {upload_error}")
                 traceback.print_exc()
                 # Continue anyway with local file path
                 blob_url = f"file://{os.path.abspath(docx_filepath)}"
@@ -593,59 +582,54 @@ class ReportFilePlugin:
 
         return document
 
-    def _upload_to_data_lake(self, filepath: str, filename: str) -> str:
-        """Uploads a file to Azure Data Lake Storage with improved error handling.
+    def _upload_to_storage(self, filepath: str, filename: str) -> str:
+        """Uploads a file to Supabase Storage with improved error handling.
         
         Args:
             filepath: Local file path
             filename: File name to use in storage
             
         Returns:
-            str: URL of the uploaded blob
+            str: URL of the uploaded file
         """
         try:
-            # Check if blob service client is available
-            if not self.blob_service_client or not AZURE_STORAGE_AVAILABLE:
-                print("Blob service client not available, cannot upload to data lake")
-                # Return a local file URL as fallback
+            # Check if Supabase client is available
+            if not self.supabase_client:
+                print("Supabase client not available, cannot upload to storage")
                 return f"file://{os.path.abspath(filepath)}"
             
-            try:
-                # Create container if it doesn't exist
-                container_client = self.blob_service_client.get_container_client(self.storage_container)
-                if not container_client.exists():
-                    container_client.create_container()
-                    print(f"Created container: {self.storage_container}")
-            except Exception as container_error:
-                print(f"Error with container: {container_error}")
-                # Try to get the container anyway, it might just be a permissions issue
-                container_client = self.blob_service_client.get_container_client(self.storage_container)
-            
-            # Generate blob path with folder structure
+            # Generate storage path with folder structure
             year = datetime.now().strftime("%Y")
             month = datetime.now().strftime("%m")
-            blob_path = f"{year}/{month}/{filename}"
-            
-            # Upload file
-            blob_client = container_client.get_blob_client(blob_path)
+            storage_path = f"{year}/{month}/{filename}"
             
             # Check if file exists
             if not os.path.exists(filepath):
                 print(f"File not found: {filepath}")
                 return f"file_not_found:{filepath}"
             
+            # Upload file to Supabase Storage
             with open(filepath, "rb") as data:
-                blob_client.upload_blob(
-                    data, 
-                    overwrite=True,
-                    content_settings=ContentSettings(content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                )
+                file_content = data.read()
+                
+            # Upload to Supabase Storage bucket
+            result = self.supabase_client.storage.from_(self.storage_bucket).upload(
+                path=storage_path,
+                file=file_content,
+                file_options={
+                    "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "upsert": "true"
+                }
+            )
             
-            print(f"File uploaded successfully: {blob_client.url}")
-            return blob_client.url
+            # Get the public URL
+            public_url = self.supabase_client.storage.from_(self.storage_bucket).get_public_url(storage_path)
+            
+            print(f"File uploaded successfully: {public_url}")
+            return public_url
             
         except Exception as e:
-            print(f"Error in _upload_to_data_lake: {e}")
+            print(f"Error in _upload_to_storage: {e}")
             traceback.print_exc()
             # Return a local file URL as fallback
             return f"file://{os.path.abspath(filepath)}"

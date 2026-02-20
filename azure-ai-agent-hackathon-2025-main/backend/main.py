@@ -6,9 +6,7 @@ import uvicorn
 import logging
 from dotenv import load_dotenv
 
-from config.settings import get_database_connection_string
 from managers.scheduler import WorkflowScheduler
-from api.app import app
 
 # Load environment variables
 load_dotenv()
@@ -20,19 +18,16 @@ def main():
     
     # Parse command line arguments
     if len(sys.argv) > 1:
-        # Get database connection string
-        connection_string = get_database_connection_string()
-        
         if sys.argv[1] == "--workflow-only":
             # Run just the workflow once
-            workflow_scheduler = WorkflowScheduler(connection_string)
+            workflow_scheduler = WorkflowScheduler()
             result = workflow_scheduler.run_now()
             print(json.dumps(result, indent=2))
             return
         
         elif sys.argv[1] == "--scheduler-only":
             # Run just the scheduler without the API
-            workflow_scheduler = WorkflowScheduler(connection_string)
+            workflow_scheduler = WorkflowScheduler()
             workflow_scheduler.start()
             try:
                 # Keep the main thread alive
@@ -45,6 +40,7 @@ def main():
             return
     
     # Run the API server
+    from api.api_server import app
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":

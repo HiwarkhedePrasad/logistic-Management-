@@ -10,7 +10,6 @@ import nest_asyncio
 from datetime import datetime
 import uuid
 import dotenv
-import pyodbc
 import sys
 import importlib.util
 import re
@@ -21,7 +20,7 @@ dotenv.load_dotenv()
 
 # Try to import modules from our application
 try:
-    from config.settings import get_database_connection_string
+    from config.settings import get_supabase_client
     from managers.chatbot_manager import ChatbotManager
     from managers.scheduler import WorkflowScheduler
     modules_imported = True
@@ -51,21 +50,14 @@ def clear_input():
 # Function to dynamically load the scheduler module
 def load_scheduler_module():
     if modules_imported:
-        connection_string = get_database_connection_string()
-        return WorkflowScheduler(connection_string)
+        return WorkflowScheduler()
     
     # Try to import the module dynamically
     try:
         spec = importlib.util.spec_from_file_location("managers.scheduler", "managers/scheduler.py")
         scheduler_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(scheduler_module)
-        
-        connection_string = os.getenv("DB_CONNECTION_STRING")
-        if not connection_string:
-            st.error("DB_CONNECTION_STRING environment variable not set")
-            return None
-            
-        return scheduler_module.WorkflowScheduler(connection_string)
+        return scheduler_module.WorkflowScheduler()
     except Exception as e:
         st.error(f"Could not load scheduler module: {e}")
         return None
@@ -75,8 +67,7 @@ def load_chatbot_module():
     """Load the chatbot module dynamically with improved error handling."""
     if modules_imported:
         try:
-            connection_string = get_database_connection_string()
-            return ChatbotManager(connection_string)
+            return ChatbotManager()
         except Exception as e:
             st.error(f"Failed to load ChatbotManager normally: {e}")
             # Fall back to dynamic loading
@@ -98,15 +89,10 @@ def load_chatbot_module():
         except Exception as e:
             st.error(f"Failed to execute chatbot module: {e}")
             return None
-        
-        connection_string = os.getenv("DB_CONNECTION_STRING")
-        if not connection_string:
-            st.error("DB_CONNECTION_STRING environment variable not set")
-            return None
             
         # Try to instantiate the ChatbotManager
         try:
-            return chatbot_module.ChatbotManager(connection_string)
+            return chatbot_module.ChatbotManager()
         except Exception as e:
             st.error(f"Failed to instantiate ChatbotManager: {e}")
             return None
@@ -132,38 +118,35 @@ def run_workflow_directly():
         st.error("Could not load workflow scheduler. Make sure all modules are properly installed.")
         return None
 
-# Function to check database connection
+# Function to check Supabase connection
 def test_db_connection():
-    connection_string = os.getenv("DB_CONNECTION_STRING")
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
     
-    if not connection_string:
-        return "DB_CONNECTION_STRING environment variable not set"
+    if not supabase_url or not supabase_key:
+        return "SUPABASE_URL or SUPABASE_KEY environment variable not set"
     
     try:
-        conn = pyodbc.connect(connection_string)
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        cursor.close()
-        conn.close()
-        return "Connection successful!"
+        from utils.database_utils import get_connection
+        client = get_connection()
+        # Test connection by querying a table
+        client.table('dim_project').select('project_id').limit(1).execute()
+        return "Supabase connection successful!"
     except Exception as e:
         return f"Connection failed: {str(e)}"
 
-# Function to check Azure AI Agent settings
-def test_azure_settings():
-    project_name = os.getenv("AZURE_AI_AGENT_PROJECT_NAME")
-    project_connection_string = os.getenv("AZURE_AI_AGENT_PROJECT_CONNECTION_STRING")
-    model_deployment_name = os.getenv("AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME")
+# Function to check OpenAI settings
+def test_openai_settings():
+    openai_key = os.getenv("OPENAI_API_KEY")
+    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
     
     missing = []
-    if not project_connection_string:
-        missing.append("AZURE_AI_AGENT_PROJECT_CONNECTION_STRING")
-    if not model_deployment_name:
-        missing.append("AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME")
+    if not openai_key:
+        missing.append("OPENAI_API_KEY")
     
     if missing:
         return f"Missing environment variables: {', '.join(missing)}"
-    return "Azure settings look good!"
+    return f"OpenAI settings look good! Model: {openai_model}"
 
 # Function to send a chat message via API
 def send_chat_message_api(message):
@@ -422,8 +405,8 @@ with st.sidebar:
     if st.button("Test Database Connection"):
         st.info(test_db_connection())
     
-    if st.button("Test Azure AI Settings"):
-        st.info(test_azure_settings())
+    if st.button("Test OpenAI Settings"):
+        st.info(test_openai_settings())
     
     # Debugging info
     st.subheader("Debug Info")
@@ -550,10 +533,10 @@ with tab3:
     # Environment variables status
     st.subheader("Environment Variables")
     env_vars = [
-        "DB_CONNECTION_STRING", 
-        "AZURE_AI_AGENT_PROJECT_NAME",
-        "AZURE_AI_AGENT_PROJECT_CONNECTION_STRING", 
-        "AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME"
+        "SUPABASE_URL", 
+        "SUPABASE_KEY",
+        "OPENAI_API_KEY", 
+        "OPENAI_MODEL"
     ]
     
     env_status = {}
@@ -561,7 +544,7 @@ with tab3:
         value = os.getenv(var)
         if value:
             # Mask sensitive info
-            if "CONNECTION_STRING" in var or "KEY" in var:
+            if "KEY" in var or "URL" in var:
                 masked = value[:5] + "..." + value[-5:] if len(value) > 10 else "***"
                 env_status[var] = f"Set: {masked}"
             else:
@@ -584,43 +567,33 @@ with tab3:
     
     # Database query test
     if st.button("Test Database Query"):
-        connection_string = os.getenv("DB_CONNECTION_STRING")
-        if not connection_string:
-            st.error("DB_CONNECTION_STRING environment variable not set")
-        else:
-            try:
-                conn = pyodbc.connect(connection_string)
-                cursor = conn.cursor()
-                
-                # Try to query the project table
-                cursor.execute("SELECT TOP 5 * FROM dim_project")
-                
-                # Fetch results
-                columns = [column[0] for column in cursor.description]
-                rows = cursor.fetchall()
-                
-                # Convert to dataframe
-                df = pd.DataFrame.from_records(rows, columns=columns)
-                
-                # Close connection
-                cursor.close()
-                conn.close()
-                
-                # Display results
+        try:
+            from utils.database_utils import get_connection
+            client = get_connection()
+            
+            # Try to query the project table
+            response = client.table('dim_project').select('*').limit(5).execute()
+            
+            if response.data:
+                df = pd.DataFrame(response.data)
                 st.success("Query successful!")
                 st.dataframe(df)
+            else:
+                st.info("No data found in dim_project table")
                 
-            except Exception as e:
-                st.error(f"Database query failed: {str(e)}")
+        except Exception as e:
+            st.error(f"Database query failed: {str(e)}")
 
     # Updated section for viewing thinking logs
     if "workflow_results" in st.session_state and st.session_state.workflow_results:
         workflow_run_id = st.session_state.workflow_results.get("workflow_run_id")
         if workflow_run_id and st.button("View Agent Thinking Logs"):
-            from plugins.logging_plugin import LoggingPlugin  # Updated import
-            connection_string = os.getenv("DB_CONNECTION_STRING")
-            logging_plugin = LoggingPlugin(connection_string)  # Use logging plugin instead of schedule plugin
-            logs_json = logging_plugin.get_agent_thinking_logs(conversation_id=workflow_run_id)  # Updated method
+            from plugins.logging_plugin import get_agent_thinking_logs
+            logs_json = get_agent_thinking_logs.invoke({
+                "conversation_id": workflow_run_id,
+                "session_id": "",
+                "limit": 500
+            })
             logs = json.loads(logs_json)
             
             if logs and not isinstance(logs, dict):  # Check if logs is list of dicts
@@ -660,27 +633,24 @@ with tab4:
         # View logs button
         if st.button("View Logs", key="view_logs_tab4"):
             try:
-                # Use the logging plugin to get logs
-                from plugins.logging_plugin import LoggingPlugin
-                connection_string = os.getenv("DB_CONNECTION_STRING")
-                logging_plugin = LoggingPlugin(connection_string)
-                
-                # Build query parameters
-                agent_name = None if agent_filter == "All" else agent_filter
+                from plugins.logging_plugin import get_agent_thinking_logs
                 
                 # Get logs
-                logs_json = logging_plugin.get_agent_thinking_logs(
-                    conversation_id=conversation_id if conversation_id else None,
-                    session_id=session_id if session_id else None,
-                    agent_name=agent_name,
-                    limit=1000
-                )
+                logs_json = get_agent_thinking_logs.invoke({
+                    "conversation_id": conversation_id if conversation_id else "",
+                    "session_id": session_id if session_id else "",
+                    "limit": 1000
+                })
                 
                 logs = json.loads(logs_json)
                 
                 if isinstance(logs, dict) and "error" in logs:
                     st.error(f"Error retrieving logs: {logs['error']}")
                 elif logs:
+                    agent_name = None if agent_filter == "All" else agent_filter
+                    if agent_name:
+                        logs = [l for l in logs if l.get('agent_name') == agent_name]
+                    
                     st.write(f"Found {len(logs)} logs")
                     
                     # Display logs in an expandable format
@@ -700,9 +670,7 @@ with tab4:
                             with col1:
                                 st.write(f"**Conversation ID:** {log.get('conversation_id', 'N/A')}")
                                 st.write(f"**Session ID:** {log.get('session_id', 'N/A')}")
-                                st.write(f"**Thread ID:** {log.get('thread_id', 'N/A')}")
                             with col2:
-                                st.write(f"**Agent ID:** {log.get('azure_agent_id', 'N/A')}")
                                 st.write(f"**Model:** {log.get('model_deployment_name', 'N/A')}")
                                 st.write(f"**Created:** {log.get('created_date', 'N/A')}")
                             
@@ -745,8 +713,7 @@ with tab5:
         if st.session_state.chat_history:
             with st.spinner("Generating report..."):
                 try:
-                    connection_string = os.getenv("DB_CONNECTION_STRING")
-                    report_plugin = ReportFilePlugin(connection_string)
+                    report_plugin = ReportFilePlugin()
                     
                     # Generate report
                     result = report_plugin.generate_report_from_conversation(
@@ -783,8 +750,7 @@ with tab5:
     if st.button("Search Reports"):
         with st.spinner("Fetching reports..."):
             try:
-                connection_string = os.getenv("DB_CONNECTION_STRING")
-                report_plugin = ReportFilePlugin(connection_string)
+                report_plugin = ReportFilePlugin()
                 
                 # Get reports
                 reports_json = report_plugin.get_reports(
@@ -828,7 +794,7 @@ with tab5:
 
 # Footer
 st.divider()
-st.caption("Equipment Schedule Agent v1.0 | Built with Streamlit and Semantic Kernel")
+st.caption("Equipment Schedule Agent v1.0 | Built with Streamlit, LangGraph & Supabase")
 
 # Add session cleanup function
 def cleanup_resources():

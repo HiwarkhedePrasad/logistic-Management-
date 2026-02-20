@@ -10,7 +10,7 @@ import operator
 
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_community.tools import DuckDuckGoSearchResults
 from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import create_react_agent
@@ -46,14 +46,13 @@ class AgentState(TypedDict):
 class ChatbotManager:
     def __init__(self):
         try:
-            deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
-            self.llm = AzureChatOpenAI(
-                azure_deployment=deployment_name,
-                api_version="2024-02-15-preview",
+            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            self.llm = ChatOpenAI(
+                model=model_name,
                 temperature=0,
             )
         except Exception as e:
-            print(f"Error initializing AzureChatOpenAI: {e}")
+            print(f"Error initializing ChatOpenAI: {e}")
             self.llm = None
             
         self.search_tool = DuckDuckGoSearchResults()

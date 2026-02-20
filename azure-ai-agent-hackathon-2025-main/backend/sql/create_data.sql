@@ -37,19 +37,19 @@ VALUES
 INSERT INTO dim_equipment_supplier (equipment_id, supplier_id, unit_cost, is_preferred, lead_time_days)
 VALUES 
 -- Equipment 1 (123456) suppliers
-(1, 1, 85000.00, 1, 180),  -- Company A is preferred
-(1, 2, 88000.00, 0, 195),  -- Company B alternative
-(1, 3, 82000.00, 0, 210),  -- Company C alternative (cheaper but longer lead time)
+(1, 1, 85000.00, TRUE, 180),  -- Company A is preferred
+(1, 2, 88000.00, FALSE, 195),  -- Company B alternative
+(1, 3, 82000.00, FALSE, 210),  -- Company C alternative (cheaper but longer lead time)
 
 -- Equipment 2 (123457) suppliers
-(2, 1, 85000.00, 1, 180),  -- Company A is preferred
-(2, 2, 86500.00, 0, 190),  -- Company B alternative
-(2, 3, 83000.00, 0, 205),  -- Company C alternative
+(2, 1, 85000.00, TRUE, 180),  -- Company A is preferred
+(2, 2, 86500.00, FALSE, 190),  -- Company B alternative
+(2, 3, 83000.00, FALSE, 205),  -- Company C alternative
 
 -- Equipment 3 (123458) suppliers
-(3, 1, 85000.00, 1, 180),  -- Company A is preferred
-(3, 2, 87500.00, 0, 185),  -- Company B alternative
-(3, 3, 84000.00, 0, 200);  -- Company C alternative
+(3, 1, 85000.00, TRUE, 180),  -- Company A is preferred
+(3, 2, 87500.00, FALSE, 185),  -- Company B alternative
+(3, 3, 84000.00, FALSE, 200);  -- Company C alternative
 
 -- Sample data for fact_purchase_order
 INSERT INTO fact_purchase_order (purchase_order_number, line_item, project_id, work_package_id, supplier_id, equipment_id, short_text, amount)

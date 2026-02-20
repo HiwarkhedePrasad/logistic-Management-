@@ -1,6 +1,7 @@
 """Configuration module initialization."""
 
+from .settings import get_supabase_client
+
 __all__ = [
-    'get_database_connection_string',
-    'get_project_client'
+    'get_supabase_client',
 ]

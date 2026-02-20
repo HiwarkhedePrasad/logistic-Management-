@@ -5,13 +5,18 @@ import threading
 import time
 from datetime import datetime, timedelta
 
+
 class WorkflowScheduler:
     """Schedules and runs the automated workflow."""
     
-    def __init__(self, connection_string):
-        self.connection_string = connection_string
+    def __init__(self, connection_string=None):
+        """Initialize the scheduler.
+        
+        Args:
+            connection_string: Legacy parameter, kept for compatibility. Not used.
+        """
         from managers.workflow_manager import AutomatedWorkflowManager
-        self.workflow_manager = AutomatedWorkflowManager(connection_string)
+        self.workflow_manager = AutomatedWorkflowManager()
         self.running = False
         self.scheduler_thread = None
     

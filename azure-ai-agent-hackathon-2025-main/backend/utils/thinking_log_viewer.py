@@ -6,6 +6,10 @@ import json
 import plotly.express as px
 from datetime import datetime
 
+from plugins.logging_plugin import get_agent_thinking_logs
+from config.settings import get_supabase_client
+
+
 def render_thinking_log_viewer():
     """Renders the thinking log viewer component in the Streamlit UI."""
     st.header("Agent Thinking Logs Viewer")
@@ -57,24 +61,15 @@ def render_thinking_logs_tab():
     # View logs button
     if st.button("View Logs"):
         try:
-            # Use the logging plugin to get logs
-            from plugins.logging_plugin import LoggingPlugin
-            from config.settings import get_database_connection_string
-            
-            # Initialize the plugin
-            connection_string = get_database_connection_string()
-            logging_plugin = LoggingPlugin(connection_string)
-            
-            # Build query parameters
+            # Use the logging plugin function directly
             agent_name = None if agent_filter == "All" else agent_filter
             
-            # Get logs
-            logs_json = logging_plugin.get_agent_thinking_logs(
-                conversation_id=conversation_id if conversation_id else None,
-                session_id=session_id if session_id else None,
-                agent_name=agent_name,
-                limit=1000  # Adjust as needed
-            )
+            # Get logs using the function
+            logs_json = get_agent_thinking_logs.invoke({
+                "conversation_id": conversation_id if conversation_id else "",
+                "session_id": session_id if session_id else "",
+                "limit": 1000
+            })
             
             logs = json.loads(logs_json)
             
@@ -88,6 +83,10 @@ def render_thinking_logs_tab():
                 
                 # Apply additional filters
                 if not df.empty:
+                    # Filter by agent name
+                    if agent_name:
+                        df = df[df["agent_name"] == agent_name]
+                    
                     # Filter by search term
                     if search_term:
                         df = df[df["thought_content"].str.contains(search_term, case=False, na=False)]
@@ -186,20 +185,12 @@ def render_thread_analysis_tab():
     # Add a button to analyze threads
     if st.button("Analyze Threads"):
         try:
-            # Import necessary modules
-            from plugins.logging_plugin import LoggingPlugin
-            from config.settings import get_database_connection_string
-            
-            # Initialize the plugin
-            connection_string = get_database_connection_string()
-            logging_plugin = LoggingPlugin(connection_string)
-            
-            # Get logs for analysis
-            logs_json = logging_plugin.get_agent_thinking_logs(
-                conversation_id=conversation_id if conversation_id else None,
-                session_id=session_id if session_id else None,
-                limit=5000
-            )
+            # Get logs for analysis using the function directly
+            logs_json = get_agent_thinking_logs.invoke({
+                "conversation_id": conversation_id if conversation_id else "",
+                "session_id": session_id if session_id else "",
+                "limit": 5000
+            })
             
             logs = json.loads(logs_json)
             
@@ -261,16 +252,12 @@ def render_stats_tab():
     st.subheader("Statistics & Metrics")
     
     try:
-        # Query logs for statistics
-        from plugins.logging_plugin import LoggingPlugin
-        from config.settings import get_database_connection_string
-        
-        # Initialize the plugin
-        connection_string = get_database_connection_string()
-        logging_plugin = LoggingPlugin(connection_string)
-        
-        # Get all logs
-        logs_json = logging_plugin.get_agent_thinking_logs(limit=5000)  # Adjust limit as needed
+        # Get all logs using the function directly
+        logs_json = get_agent_thinking_logs.invoke({
+            "conversation_id": "",
+            "session_id": "",
+            "limit": 5000
+        })
         logs = json.loads(logs_json)
         
         if isinstance(logs, dict) and "error" in logs:
