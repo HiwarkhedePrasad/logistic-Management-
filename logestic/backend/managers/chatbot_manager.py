@@ -75,7 +75,7 @@ class ChatbotManager:
         def create_agent(llm, tools, system_prompt):
             if llm is None:
                 return None
-            return create_react_agent(llm, tools, state_modifier=system_prompt)
+            return create_react_agent(llm, tools, prompt=system_prompt)
             
         scheduler = create_agent(self.llm, self.scheduler_tools, get_scheduler_agent_instructions())
         political = create_agent(self.llm, self.political_tools, get_political_risk_agent_instructions())

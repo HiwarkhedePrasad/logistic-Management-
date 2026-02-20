@@ -2,16 +2,17 @@
 
 import json
 import uuid
+from typing import Optional
 from datetime import datetime
 from langchain_core.tools import tool
 from utils.database_utils import insert_table_with_retry, get_connection
 
 @tool
 def log_agent_thinking(agent_name: str, thinking_stage: str, thought_content: str, 
-                       conversation_id: str = None, session_id: str = None, 
+                       conversation_id: Optional[str] = None, session_id: Optional[str] = None, 
                        model_deployment_name: str = "langchain-model",
-                       user_query: str = None, 
-                       agent_output: str = None, thinking_stage_output: str = None,
+                       user_query: Optional[str] = None, 
+                       agent_output: Optional[str] = None, thinking_stage_output: Optional[str] = None,
                        status: str = "success") -> str:
     """Logs the agent's thinking process to Supabase.
     
@@ -104,9 +105,9 @@ def log_agent_response(agent_name: str, response_content: str,
 
 
 @tool
-def log_agent_event(agent_name: str, action: str, result_summary: str = None, 
-                conversation_id: str = None, session_id: str = None,
-                user_query: str = None, agent_output: str = None) -> str:
+def log_agent_event(agent_name: str, action: str, result_summary: Optional[str] = None, 
+                conversation_id: Optional[str] = None, session_id: Optional[str] = None,
+                user_query: Optional[str] = None, agent_output: Optional[str] = None) -> str:
     """Logs an agent event to the database (Supabase)."""
     try:
         if not conversation_id:

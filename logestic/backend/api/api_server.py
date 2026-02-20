@@ -1,6 +1,7 @@
 """FastAPI server for the equipment schedule agent."""
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 import os
@@ -18,6 +19,15 @@ from utils.database_utils import get_connection, execute_rpc_with_retry
 
 
 app = FastAPI(title="Equipment Schedule Agent API")
+
+# Add CORS middleware so the frontend can call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Store active chatbot managers
 active_managers: Dict[str, ChatbotManager] = {}

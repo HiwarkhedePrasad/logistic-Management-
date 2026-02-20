@@ -835,9 +835,10 @@ class ReportFilePlugin:
             })
 
 from langchain_core.tools import tool
+from typing import Optional
 
 @tool
-def save_report_to_file(report_content: str, session_id: str, conversation_id: str, report_title: str = None) -> str:
+def save_report_to_file(report_content: str, session_id: str, conversation_id: str, report_title: Optional[str] = None) -> str:
     """Saves a report to Word document and uploads to data lake."""
     try:
         plugin = ReportFilePlugin(connection_string=None)
