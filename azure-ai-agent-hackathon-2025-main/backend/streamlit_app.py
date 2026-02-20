@@ -135,18 +135,18 @@ def test_db_connection():
     except Exception as e:
         return f"Connection failed: {str(e)}"
 
-# Function to check OpenAI settings
-def test_openai_settings():
-    openai_key = os.getenv("OPENAI_API_KEY")
-    openai_model = os.getenv("OPENAI_MODEL", "gpt-4o")
+# Function to check Groq settings
+def test_groq_settings():
+    groq_key = os.getenv("GROQ_API_KEY")
+    groq_model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
     
     missing = []
-    if not openai_key:
-        missing.append("OPENAI_API_KEY")
-    
+    if not groq_key:
+        missing.append("GROQ_API_KEY")
+        
     if missing:
-        return f"Missing environment variables: {', '.join(missing)}"
-    return f"OpenAI settings look good! Model: {openai_model}"
+        return f"Missing Groq settings: {', '.join(missing)}"
+    return f"Groq settings look good! Model: {groq_model}"
 
 # Function to send a chat message via API
 def send_chat_message_api(message):
@@ -405,8 +405,8 @@ with st.sidebar:
     if st.button("Test Database Connection"):
         st.info(test_db_connection())
     
-    if st.button("Test OpenAI Settings"):
-        st.info(test_openai_settings())
+    if st.button("Test Groq Settings"):
+        st.info(test_groq_settings())
     
     # Debugging info
     st.subheader("Debug Info")
@@ -535,8 +535,8 @@ with tab3:
     env_vars = [
         "SUPABASE_URL", 
         "SUPABASE_KEY",
-        "OPENAI_API_KEY", 
-        "OPENAI_MODEL"
+        "GROQ_API_KEY", 
+        "GROQ_MODEL"
     ]
     
     env_status = {}

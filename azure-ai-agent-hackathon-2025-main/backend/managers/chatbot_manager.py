@@ -10,7 +10,7 @@ import operator
 
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchResults
 from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import create_react_agent
@@ -46,13 +46,13 @@ class AgentState(TypedDict):
 class ChatbotManager:
     def __init__(self):
         try:
-            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
-            self.llm = ChatOpenAI(
+            model_name = os.getenv("GROQ_MODEL", "llama3-70b-8192")
+            self.llm = ChatGroq(
                 model=model_name,
                 temperature=0,
             )
         except Exception as e:
-            print(f"Error initializing ChatOpenAI: {e}")
+            print(f"Error initializing ChatGroq: {e}")
             self.llm = None
             
         self.search_tool = DuckDuckGoSearchResults()
