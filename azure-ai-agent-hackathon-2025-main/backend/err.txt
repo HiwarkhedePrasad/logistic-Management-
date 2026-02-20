@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+  File "C:\Users\phiwa\Desktop\cc\azure-ai-agent-hackathon-2025-main\azure-ai-agent-hackathon-2025-main\backend\api\__init__.py", line 3, in <module>
+    from .app import app
+  File "C:\Users\phiwa\Desktop\cc\azure-ai-agent-hackathon-2025-main\azure-ai-agent-hackathon-2025-main\backend\api\app.py", line 9, in <module>
+    from config.settings import get_database_connection_string
+ImportError: cannot import name 'get_database_connection_string' from 'config.settings' (C:\Users\phiwa\Desktop\cc\azure-ai-agent-hackathon-2025-main\azure-ai-agent-hackathon-2025-main\backend\config\settings.py)
