@@ -48,12 +48,31 @@ export const columns: ColumnDef<Report>[] = [
     id: 'actions',
     header: 'Action',
     cell: ({ row }) => {
+      const handleDownload = () => {
+        let url = row.original.blob_url;
+        if (!url) return;
+
+        // If it's a local file URL or Supabase storage upload failed, use the backend download API
+        if (url.startsWith('file://')) {
+          const filename = url.split('/').pop() || url.split('\\').pop();
+          if (filename) {
+            url = `http://localhost:8000/api/reports/download/${filename}`;
+          }
+        }
+
+        // Create a temporary link and click it to trigger download
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', '');
+        link.setAttribute('rel', 'noopener noreferrer');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
       return (
-        <Button asChild size="sm">
-          <a href={row.original.blob_url} target="_blank" rel="noopener noreferrer">
-            Download Report
-            <CloudDownload className="ml-2 h-4 w-4" />
-          </a>
+        <Button size="sm" onClick={handleDownload}>
+          Download Report
+          <CloudDownload className="ml-2 h-4 w-4" />
         </Button>
       );
     },

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { message, session_id } = body;
+    const { message, session_id, user_email } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         message,
-        session_id: session_id || undefined, // Only include session_id if it exists
+        session_id: session_id || undefined,
+        user_email: user_email || undefined,
       }),
     });
 

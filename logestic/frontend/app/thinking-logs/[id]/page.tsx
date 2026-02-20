@@ -2,7 +2,7 @@
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { useEffect, useRef, useState } from 'react';
-import LeaderLine from 'leader-line-new';
+// LeaderLine is imported dynamically in useEffect to avoid SSR crash
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -25,6 +25,8 @@ import 'react-vertical-timeline-component/style.min.css';
 import './vertical-timeline.css';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
+import MapChart from '@/app/chat/MapChart';
+import { Tooltip } from 'react-tooltip';
 
 const isBrowser = typeof window !== 'undefined';
 
@@ -82,7 +84,7 @@ const CollapsibleSection = ({ thought }: { thought: any }) => {
               transition={{ duration: 0.15 }}
               className={`${styles['markdown-body']} bg-muted border !mt-4 rounded-lg p-4 !text-foreground text-default`}
             >
-              <Markdown remarkPlugins={[remarkGfm]}>{thought.thinking_stage_output}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]}>{thought.thinking_stage_output || thought.thought_content || 'No output recorded'}</Markdown>
             </motion.div>
           </CollapsibleContent>
         )}
@@ -93,6 +95,8 @@ const CollapsibleSection = ({ thought }: { thought: any }) => {
 
 export default function ThinkingLogPage() {
   const [thinkingData, setThinkingData] = useState<any>(null);
+  const [heatmapDataMap, setHeatmapDataMap] = useState<Record<string, any[]>>({});
+  const [content, setContent] = useState('');
   const [mounted, setMounted] = useState(false);
   const params = useParams();
   const agentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -120,6 +124,31 @@ export default function ThinkingLogPage() {
   }, [params.id]);
 
   useEffect(() => {
+    const fetchHeatmapData = async () => {
+      if (thinkingData?.conversations) {
+        for (const convo of thinkingData.conversations) {
+          try {
+            const response = await fetch(`/api/heatmap?conversation_id=${convo.conversation_id}&session_id=${params.id}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.length > 0) {
+                setHeatmapDataMap(prev => ({
+                  ...prev,
+                  [convo.conversation_id]: data
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching heatmap data:', error);
+          }
+        }
+      }
+    };
+
+    fetchHeatmapData();
+  }, [thinkingData, params.id]);
+
+  useEffect(() => {
     if (!isBrowser || !mounted || !thinkingData?.conversations?.length) return;
 
     const cleanup = () => {
@@ -139,7 +168,16 @@ export default function ThinkingLogPage() {
 
     cleanup();
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      // Dynamically import leader-line-new only in the browser
+      let LeaderLine: any;
+      try {
+        const mod = await import('leader-line-new');
+        LeaderLine = mod.default;
+      } catch (e) {
+        console.warn('LeaderLine not available:', e);
+        return;
+      }
       const conversations = thinkingData?.conversations;
 
       conversations.forEach((conversation: any) => {
@@ -216,7 +254,7 @@ export default function ThinkingLogPage() {
         </div>
         <div>
           <div className="flex flex-col">
-            {thinkingData?.conversations.map((conversation: any, index: number) => (
+            {thinkingData?.conversations?.map((conversation: any, index: number) => (
               <motion.div
                 key={conversation.conversation_id}
                 className="w-full mb-8"
@@ -234,14 +272,23 @@ export default function ThinkingLogPage() {
                     Query: {conversation.user_query}
                   </h3>
 
+                  {heatmapDataMap[conversation.conversation_id] && (
+                    <div className="mb-8 mt-4 p-4 bg-background border rounded-lg w-full max-w-4xl mx-auto">
+                      <h4 className="font-semibold mb-4">Country Risk Analysis</h4>
+                      <MapChart setTooltipContent={setContent} breakdown={heatmapDataMap[conversation.conversation_id]} />
+                      <Tooltip id="country-tooltip" offset={10} place="top">
+                        {content}
+                      </Tooltip>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-3">
                     {conversation.agents.map((agent: any, agentIndex: number) => (
                       <motion.div
                         key={`${conversation.conversation_id}-${agent.agent_name}`}
                         ref={(el) => (agentRefs.current[`${conversation.conversation_id}-${agent.agent_name}`] = el)}
-                        className={`bg-card text-card-foreground rounded-xl shadow-sm w-[60%] mb-20 ${
-                          agentIndex % 2 === 0 ? 'self-start' : 'self-end'
-                        }`}
+                        className={`bg-card text-card-foreground rounded-xl shadow-sm w-[60%] mb-20 ${agentIndex % 2 === 0 ? 'self-start' : 'self-end'
+                          }`}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{

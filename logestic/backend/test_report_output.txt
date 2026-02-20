@@ -1,0 +1,2 @@
+SUCCESS:
+{"status":"success","response":"REPORTING_AGENT > 📄 Report Generated Successfully\nFilename: risk_report_20260221_034757_5b9d04a2.docx\nDownload URL: file://C:\\\\Users\\\\krush\\\\OneDrive\\\\Desktop\\\\cc\\\\logistic-Management-\\\\logestic\\\\backend\\\\reports\\\\risk_report_20260221_034757_5b9d04a2.docx\nReport ID: 5b9d04a2","error":null,"session_id":"13e976f4-3318-4006-9f9b-87f248bb4214"}

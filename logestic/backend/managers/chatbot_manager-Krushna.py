@@ -42,7 +42,6 @@ class AgentState(TypedDict):
     session_id: str
     conversation_id: str
     next_node: str
-    user_email: str
 
 class ChatbotManager:
     def __init__(self):
@@ -64,7 +63,7 @@ class ChatbotManager:
         self.tariff_tools = [self.search_tool, log_agent_thinking]
         self.logistics_tools = [self.search_tool, log_agent_thinking]
         self.reporting_tools = [save_report_to_file, log_agent_thinking]
-        self.assistant_tools = [get_schedule_comparison_data, log_agent_thinking]
+        self.assistant_tools = [log_agent_thinking]
         
         self.graph = self._build_graph()
         self.sessions = {}
@@ -85,81 +84,49 @@ class ChatbotManager:
         reporting = create_agent(self.llm, self.reporting_tools, get_reporting_agent_instructions())
         assistant = create_agent(self.llm, self.assistant_tools, get_assistant_agent_instructions())
         
-        def _inject_ids(state: AgentState):
-            """Create a SystemMessage with session/conversation IDs for agents to use in tool calls."""
-            return SystemMessage(
-                content=f"IMPORTANT: For ALL tool calls that accept session_id and conversation_id, "
-                f"use these exact values: session_id=\"{state['session_id']}\", "
-                f"conversation_id=\"{state['conversation_id']}\". "
-                f"The user's email is: {state.get('user_email', 'not provided')}. "
-                f"If calling save_report_to_file, include recipient_email=\"{state.get('user_email', '')}\"."
-            )
-
-        async def _safe_invoke(agent, state: AgentState, agent_name: str):
-            """Invoke an agent with error handling and retry on Groq tool_use_failed errors."""
-            id_msg = _inject_ids(state)
-            messages = [id_msg] + list(state["messages"])
-            try:
-                result = await agent.ainvoke({"messages": messages})
-                return result["messages"][-1].content
-            except Exception as e:
-                error_str = str(e)
-                if "tool_use_failed" in error_str or "400" in error_str:
-                    # Retry with only HumanMessages to avoid confusing the model
-                    print(f"[{agent_name}] Tool call error, retrying with simplified messages...")
-                    human_msgs = [msg for msg in state["messages"] if isinstance(msg, HumanMessage)]
-                    if human_msgs:
-                        try:
-                            result = await agent.ainvoke({"messages": [id_msg] + human_msgs})
-                            return result["messages"][-1].content
-                        except Exception as retry_error:
-                            print(f"[{agent_name}] Retry also failed: {retry_error}")
-                            return f"I processed your request but encountered a formatting issue. Please try again."
-                raise
-
         async def run_scheduler(state: AgentState):
             if not scheduler: return {"messages": [AIMessage(content="Agent not available")]}
-            content = await _safe_invoke(scheduler, state, SCHEDULER_AGENT)
+            result = await scheduler.ainvoke({"messages": state["messages"]})
             log_agent_event.invoke({
                 "agent_name": SCHEDULER_AGENT, 
                 "action": "Generated schedule analysis", 
                 "conversation_id": state["conversation_id"], 
                 "session_id": state["session_id"],
-                "agent_output": content
+                "agent_output": result["messages"][-1].content
             })
-            return {"messages": [AIMessage(content=f"SCHEDULER_AGENT > {content}")]}
+            return {"messages": [AIMessage(content=f"SCHEDULER_AGENT > {result['messages'][-1].content}")]}
             
         async def run_political(state: AgentState):
             if not political: return {"messages": [AIMessage(content="Agent not available")]}
-            content = await _safe_invoke(political, state, POLITICAL_RISK_AGENT)
+            result = await political.ainvoke({"messages": state["messages"]})
             log_agent_event.invoke({
                 "agent_name": POLITICAL_RISK_AGENT, 
                 "action": "Generated political risk analysis", 
                 "conversation_id": state["conversation_id"], 
                 "session_id": state["session_id"],
-                "agent_output": content
+                "agent_output": result["messages"][-1].content
             })
-            return {"messages": [AIMessage(content=f"POLITICAL_RISK_AGENT > {content}")]}
+            return {"messages": [AIMessage(content=f"POLITICAL_RISK_AGENT > {result['messages'][-1].content}")]}
 
         async def run_tariff(state: AgentState):
             if not tariff: return {"messages": [AIMessage(content="Agent not available")]}
-            content = await _safe_invoke(tariff, state, TARIFF_RISK_AGENT)
-            return {"messages": [AIMessage(content=f"TARIFF_RISK_AGENT > {content}")]}
+            result = await tariff.ainvoke({"messages": state["messages"]})
+            return {"messages": [AIMessage(content=f"TARIFF_RISK_AGENT > {result['messages'][-1].content}")]}
 
         async def run_logistics(state: AgentState):
             if not logistics: return {"messages": [AIMessage(content="Agent not available")]}
-            content = await _safe_invoke(logistics, state, LOGISTICS_RISK_AGENT)
-            return {"messages": [AIMessage(content=f"LOGISTICS_RISK_AGENT > {content}")]}
+            result = await logistics.ainvoke({"messages": state["messages"]})
+            return {"messages": [AIMessage(content=f"LOGISTICS_RISK_AGENT > {result['messages'][-1].content}")]}
 
         async def run_reporting(state: AgentState):
             if not reporting: return {"messages": [AIMessage(content="Agent not available")]}
-            content = await _safe_invoke(reporting, state, REPORTING_AGENT)
-            return {"messages": [AIMessage(content=f"REPORTING_AGENT > {content}")]}
+            result = await reporting.ainvoke({"messages": state["messages"]})
+            return {"messages": [AIMessage(content=f"REPORTING_AGENT > {result['messages'][-1].content}")]}
 
         async def run_assistant(state: AgentState):
             if not assistant: return {"messages": [AIMessage(content="Agent not available")]}
-            content = await _safe_invoke(assistant, state, ASSISTANT_AGENT)
-            return {"messages": [AIMessage(content=f"ASSISTANT_AGENT > {content}")]}
+            result = await assistant.ainvoke({"messages": state["messages"]})
+            return {"messages": [AIMessage(content=f"ASSISTANT_AGENT > {result['messages'][-1].content}")]}
             
         # Router node
         async def router(state: AgentState) -> dict:
@@ -171,12 +138,7 @@ class ChatbotManager:
                 return {"next_node": TARIFF_RISK_AGENT}
             elif "logistics" in last_message or "shipping" in last_message:
                 return {"next_node": LOGISTICS_RISK_AGENT}
-            elif any(kw in last_message for kw in [
-                "schedule", "risk", "shipment", "delivery", "deliveries",
-                "equipment", "project", "order", "delay", "variance",
-                "due date", "status", "track", "all my", "show me",
-                "view all", "list all", "report", "generate"
-            ]):
+            elif "schedule" in last_message or "risk" in last_message:
                 return {"next_node": SCHEDULER_AGENT}
             else:
                 return {"next_node": ASSISTANT_AGENT}
@@ -204,7 +166,6 @@ class ChatbotManager:
                 POLITICAL_RISK_AGENT: SCHEDULER_AGENT, # Requires baseline data first
                 TARIFF_RISK_AGENT: SCHEDULER_AGENT,
                 LOGISTICS_RISK_AGENT: SCHEDULER_AGENT,
-                REPORTING_AGENT: SCHEDULER_AGENT, # Collect data first, then generate report
                 ASSISTANT_AGENT: ASSISTANT_AGENT
             }
         )
@@ -256,7 +217,7 @@ class ChatbotManager:
     async def cleanup_sessions(self, max_age_minutes=0):
         self.sessions.clear()
 
-    async def process_message(self, session_id: str, message: str, user_email: str = None) -> Dict[str, Any]:
+    async def process_message(self, session_id: str, message: str) -> Dict[str, Any]:
         """Main entry point for API chat processing."""
         try:
             session = await self.initialize_session(session_id)
@@ -267,8 +228,7 @@ class ChatbotManager:
                 "messages": session["messages"] + [input_message],
                 "session_id": session_id,
                 "conversation_id": conversation_id,
-                "next_node": "",
-                "user_email": user_email or ""
+                "next_node": ""
             }
             
             # Log user query

@@ -1,24 +1,27 @@
 import threading
 from config.settings import get_supabase_client
 
-# Create a thread-local storage for connection pooling
-_thread_local = threading.local()
+_client_instance = None
+_client_lock = threading.Lock()
 
 def get_connection():
-    """Gets a Supabase client from thread local storage.
+    """Gets a singleton Supabase client.
     
     Returns:
         Client: The Supabase client connection
     """
-    if not hasattr(_thread_local, "client") or _thread_local.client is None:
-        try:
-            _thread_local.client = get_supabase_client()
-            print("Created new Supabase client")
-        except Exception as e:
-            print(f"Error connecting to Supabase: {e}")
-            raise
+    global _client_instance
+    if _client_instance is None:
+        with _client_lock:
+            if _client_instance is None:
+                try:
+                    _client_instance = get_supabase_client()
+                    print("Created new Supabase client")
+                except Exception as e:
+                    print(f"Error connecting to Supabase: {e}")
+                    raise
     
-    return _thread_local.client
+    return _client_instance
 
 def execute_rpc_with_retry(rpc_name: str, params=None, max_retries=3):
     """Executes a Supabase RPC data fetch with retry logic.

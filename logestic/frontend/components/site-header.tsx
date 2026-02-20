@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { useTheme } from 'next-themes';
 import RiskWiseLogo from './riskwise_logo4.png';
 import Image from 'next/image';
+import { UserButton, SignedIn, SignedOut } from '@clerk/nextjs';
 
 export function SiteHeader() {
   const { setTheme, theme } = useTheme();
@@ -43,8 +44,17 @@ export function SiteHeader() {
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">Toggle theme</span>
           </Button>
+          <SignedIn>
+            <UserButton afterSignOutUrl="/sign-in" />
+          </SignedIn>
+          <SignedOut>
+            <Link href="/sign-in">
+              <Button variant="outline" size="sm">Sign In</Button>
+            </Link>
+          </SignedOut>
         </div>
       </div>
     </header>
   );
 }
+

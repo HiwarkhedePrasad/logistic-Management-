@@ -6,6 +6,7 @@ import { ChatMessageList } from '@/components/ui/chat/chat-message-list';
 import { Button } from '@/components/ui/button';
 import { CopyIcon, CornerDownLeft, RefreshCcw, Volume2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useUser } from '@clerk/nextjs';
 // import styles from './markdown-styles.module.css';
 import styles from './markdown-styles-1.module.css';
 import Markdown from 'react-markdown';
@@ -60,6 +61,8 @@ export default function ChatPage() {
   ]);
   const [input, setInput] = useState('');
   const [heatmapDataMap, setHeatmapDataMap] = useState<Record<string, HeatmapData[]>>({});
+  const { user } = useUser();
+  const userEmail = user?.primaryEmailAddress?.emailAddress || '';
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -106,6 +109,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           message: input.trim(),
           session_id: sessionId,
+          user_email: userEmail,
         }),
       });
 
@@ -175,35 +179,34 @@ export default function ChatPage() {
       console.log('Session data:', data);
 
       // Transform the API response into chat messages
-      const transformedMessages = data.conversations.flatMap((conv: any) =>
-        conv.messages
-          .map((msg: any, i: number) => {
-            const messages = [];
+      // Transform the API response into chat messages
+      const seenUserQueries = new Set<string>();
+      const transformedMessages: ChatMessage[] = [];
 
-            if (i === 0 && msg.user_query) {
-              messages.push({
-                id: Date.now().toString(),
-                role: 'user',
-                content: msg.user_query,
-              });
-            }
+      for (const conv of data.conversations) {
+        for (const msg of conv.messages) {
+          // Show user query if present and not already shown
+          if (msg.user_query && !seenUserQueries.has(msg.user_query)) {
+            seenUserQueries.add(msg.user_query);
+            transformedMessages.push({
+              id: Date.now().toString() + Math.random(),
+              role: 'user',
+              content: msg.user_query,
+            });
+          }
 
-            if (msg.agent_output && !msg.agent_output.startsWith('```json\n')) {
-              if (msg.agent_name === 'Chatbot' || msg.action === 'Political Risk JSON Data') {
-                messages.push({
-                  id: Date.now().toString(),
-                  role: 'assistant',
-                  content: msg.agent_output,
-                  convo_id: conv.conversation_id,
-                  action: msg.action,
-                });
-              }
-            }
-
-            return messages;
-          })
-          .flat()
-      );
+          // Show agent output — accept all agent names, not just 'Chatbot'
+          if (msg.agent_output && !msg.agent_output.startsWith('```json\n')) {
+            transformedMessages.push({
+              id: Date.now().toString() + Math.random(),
+              role: 'assistant',
+              content: msg.agent_output,
+              convo_id: conv.conversation_id,
+              action: msg.action,
+            });
+          }
+        }
+      }
 
       // Only update messages if we have some, otherwise keep the welcome message
       if (transformedMessages.length > 0) {

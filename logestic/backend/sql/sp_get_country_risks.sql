@@ -19,7 +19,7 @@ BEGIN
         -- Extract political risks from agent event log JSON output
         SELECT
             dat.conversation_id::TEXT AS conv_id,
-            dat.session_id AS sess_id,
+            dat.session_id::TEXT AS sess_id,
             TRIM(country_split.country_name) AS country_name,
             pr->>'political_type' AS political_type,
             pr->>'risk_information' AS risk_information,

@@ -8,11 +8,6 @@ import re
 import traceback
 import time
 import tempfile
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
 from utils.database_utils import get_connection, insert_table_with_retry
 
 # Import the Spire.Doc library
@@ -70,8 +65,7 @@ class ReportFilePlugin:
             SUPABASE_STORAGE_AVAILABLE = False
     
     def save_report_to_file(self, report_content: str, session_id: str, 
-                          conversation_id: str, report_title: str = None,
-                          recipient_email: str = None) -> str:
+                          conversation_id: str, report_title: str = None) -> str:
         """Saves a report to Word document and uploads to data lake with improved error handling.
         
         Args:
@@ -79,7 +73,6 @@ class ReportFilePlugin:
             session_id: The session ID
             conversation_id: The conversation ID
             report_title: Optional report title
-            recipient_email: Optional email to send the report to
             
         Returns:
             str: JSON string with result information
@@ -178,17 +171,6 @@ class ReportFilePlugin:
             
             # Return success information
             print(f"==== REPORT GENERATION COMPLETED SUCCESSFULLY ====\n")
-            
-            # Send email if recipient is provided
-            email_sent = False
-            if recipient_email:
-                try:
-                    email_sent = self._send_report_email(
-                        recipient_email, docx_filepath, docx_filename, report_title
-                    )
-                except Exception as email_error:
-                    print(f"Error sending email: {email_error}")
-                    traceback.print_exc()
             return json.dumps({
                 "success": True,
                 "filename": docx_filename,
@@ -196,9 +178,7 @@ class ReportFilePlugin:
                 "blob_url": blob_url,
                 "session_id": session_id,
                 "conversation_id": conversation_id,
-                "report_id": report_id,
-                "email_sent": email_sent,
-                "email_recipient": recipient_email or "not provided"
+                "report_id": report_id
             })
             
         except Exception as e:
@@ -653,80 +633,6 @@ class ReportFilePlugin:
             traceback.print_exc()
             # Return a local file URL as fallback
             return f"file://{os.path.abspath(filepath)}"
-    
-    def _send_report_email(self, recipient_email: str, filepath: str, 
-                           filename: str, report_title: str = None) -> bool:
-        """Send the generated report as an email attachment using Gmail SMTP.
-        
-        Args:
-            recipient_email: Email address to send the report to
-            filepath: Local path to the report file
-            filename: Name of the report file
-            report_title: Optional title for the email subject
-            
-        Returns:
-            bool: True if email was sent successfully
-        """
-        smtp_email = os.getenv("SMTP_EMAIL")
-        smtp_password = os.getenv("SMTP_PASSWORD")
-        
-        if not smtp_email or not smtp_password:
-            print("SMTP credentials not configured. Skipping email send.")
-            return False
-        
-        if not recipient_email or not os.path.exists(filepath):
-            print(f"Invalid email ({recipient_email}) or file not found ({filepath})")
-            return False
-        
-        try:
-            print(f"Sending report email to {recipient_email}...")
-            
-            msg = MIMEMultipart()
-            msg['From'] = smtp_email
-            msg['To'] = recipient_email
-            msg['Subject'] = f"RiskWise Report: {report_title or filename}"
-            
-            # Email body
-            body = f"""
-Hello,
-
-Your RiskWise report "{report_title or filename}" has been generated and is attached to this email.
-
-Report Details:
-- Filename: {filename}
-- Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-Thank you for using RiskWise - AI Procurement Risk Analysis Platform.
-
-Best regards,
-RiskWise Team
-"""
-            msg.attach(MIMEText(body, 'plain'))
-            
-            # Attach the report file
-            with open(filepath, 'rb') as f:
-                attachment = MIMEBase('application', 'octet-stream')
-                attachment.set_payload(f.read())
-                encoders.encode_base64(attachment)
-                attachment.add_header(
-                    'Content-Disposition', 
-                    f'attachment; filename={filename}'
-                )
-                msg.attach(attachment)
-            
-            # Send via Gmail SMTP
-            with smtplib.SMTP('smtp.gmail.com', 587) as server:
-                server.starttls()
-                server.login(smtp_email, smtp_password)
-                server.send_message(msg)
-            
-            print(f"Email sent successfully to {recipient_email}")
-            return True
-            
-        except Exception as e:
-            print(f"Error sending email: {e}")
-            traceback.print_exc()
-            return False
     
     def _log_report_to_database(self, session_id: str, conversation_id: str, 
                               filename: str, blob_url: str):

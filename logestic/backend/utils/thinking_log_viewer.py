@@ -65,11 +65,11 @@ def render_thinking_logs_tab():
             agent_name = None if agent_filter == "All" else agent_filter
             
             # Get logs using the function
-            logs_json = get_agent_thinking_logs.invoke({
-                "conversation_id": conversation_id if conversation_id else "",
-                "session_id": session_id if session_id else "",
-                "limit": 1000
-            })
+            logs_json = get_agent_thinking_logs(
+                conversation_id=conversation_id if conversation_id else "",
+                session_id=session_id if session_id else "",
+                limit=1000
+            )
             
             logs = json.loads(logs_json)
             
@@ -93,9 +93,9 @@ def render_thinking_logs_tab():
                     
                     # Filter by date
                     if "created_date" in df.columns:
-                        df["created_date"] = pd.to_datetime(df["created_date"])
-                        start_datetime = pd.to_datetime(start_date)
-                        end_datetime = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+                        df["created_date"] = pd.to_datetime(df["created_date"], utc=True)
+                        start_datetime = pd.to_datetime(start_date).tz_localize('UTC')
+                        end_datetime = (pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)).tz_localize('UTC')
                         df = df[(df["created_date"] >= start_datetime) & (df["created_date"] <= end_datetime)]
                     
                     # Filter by status
@@ -186,11 +186,11 @@ def render_thread_analysis_tab():
     if st.button("Analyze Threads"):
         try:
             # Get logs for analysis using the function directly
-            logs_json = get_agent_thinking_logs.invoke({
-                "conversation_id": conversation_id if conversation_id else "",
-                "session_id": session_id if session_id else "",
-                "limit": 5000
-            })
+            logs_json = get_agent_thinking_logs(
+                conversation_id=conversation_id if conversation_id else "",
+                session_id=session_id if session_id else "",
+                limit=5000
+            )
             
             logs = json.loads(logs_json)
             
@@ -253,11 +253,11 @@ def render_stats_tab():
     
     try:
         # Get all logs using the function directly
-        logs_json = get_agent_thinking_logs.invoke({
-            "conversation_id": "",
-            "session_id": "",
-            "limit": 5000
-        })
+        logs_json = get_agent_thinking_logs(
+            conversation_id="",
+            session_id="",
+            limit=5000
+        )
         logs = json.loads(logs_json)
         
         if isinstance(logs, dict) and "error" in logs:

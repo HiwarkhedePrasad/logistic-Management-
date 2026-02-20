@@ -1,7 +1,6 @@
 """FastAPI server for the equipment schedule agent."""
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
@@ -37,7 +36,6 @@ active_managers: Dict[str, ChatbotManager] = {}
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
-    user_email: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -121,7 +119,7 @@ async def chat_endpoint(request: ChatRequest):
         # Process the message
         try:
             response = await asyncio.wait_for(
-                chatbot_manager.process_message(session_id, request.message, user_email=request.user_email),
+                chatbot_manager.process_message(session_id, request.message),
                 timeout=300,
             )
 
@@ -273,9 +271,7 @@ async def get_thinking_logs():
     try:
         client = get_connection()
 
-        response = client.table('dim_agent_thinking_log').select('*').not_.is_(
-            'session_id', 'null'
-        ).order(
+        response = client.table('dim_agent_thinking_log').select('*').order(
             'created_date', desc=True
         ).limit(500).execute()
 
@@ -341,7 +337,7 @@ async def get_thinking_log_ids():
 
         response = client.table('dim_agent_thinking_log').select(
             'session_id, user_query, created_date'
-        ).not_.is_('user_query', 'null').not_.is_('session_id', 'null').order('created_date', desc=True).execute()
+        ).not_.is_('user_query', 'null').order('created_date', desc=True).execute()
 
         if not response.data:
             return []
@@ -535,27 +531,6 @@ async def get_reports():
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error retrieving reports: {str(e)}"
-        )
-
-
-@app.get("/api/reports/download/{filename}")
-async def download_report(filename: str):
-    try:
-        # Ensure no path traversal
-        safe_filename = os.path.basename(filename)
-        file_path = os.path.join(os.getcwd(), "reports", safe_filename)
-        
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="Report not found")
-            
-        return FileResponse(
-            path=file_path,
-            filename=safe_filename,
-            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error downloading report: {str(e)}"
         )
 
 
