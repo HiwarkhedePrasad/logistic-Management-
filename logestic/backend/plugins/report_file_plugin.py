@@ -295,6 +295,58 @@ class ReportFilePlugin:
             margins.Left = 72.0
             margins.Right = 72.0
 
+            # --- Add Header with Logo ---
+            try:
+                header = section.HeadersFooters.Header
+                header_para = header.AddParagraph()
+                
+                # Resolve the logo path (logestic/frontend/components/riskwise_logo.png)
+                plugin_dir = os.path.dirname(os.path.abspath(__file__))
+                backend_dir = os.path.dirname(plugin_dir)
+                logestic_dir = os.path.dirname(backend_dir)
+                logo_path = os.path.join(logestic_dir, "frontend", "components", "riskwise_logo.png")
+                
+                if os.path.exists(logo_path):
+                    picture = header_para.AppendPicture(logo_path)
+                    # Scale picture if needed to fit header height (e.g. 40px height)
+                    picture.Height = 40
+                    picture.Width = 40 * (picture.Width / picture.Height) if picture.Height > 0 else 40
+                    
+                header_para.Format.HorizontalAlignment = HorizontalAlignment.Right
+            except Exception as e:
+                print(f"Warning: Could not add header/logo: {e}")
+
+            # --- Add Footer with Personalization ---
+            try:
+                footer = section.HeadersFooters.Footer
+                footer_para = footer.AddParagraph()
+                
+                # Format text
+                tr = footer_para.AppendText("RiskWise Procurement Analysis - Confidential | Page ")
+                try:
+                    tr.CharacterFormat.FontName = "Arial"
+                    tr.CharacterFormat.FontSize = 9
+                    tr.CharacterFormat.TextColor = Color.Gray
+                except:
+                    pass
+                
+                # Add page number field
+                footer_para.AppendField("page number", FieldType.FieldPage)
+                
+                tr2 = footer_para.AppendText(" of ")
+                try:
+                    tr2.CharacterFormat.FontName = "Arial"
+                    tr2.CharacterFormat.FontSize = 9
+                    tr2.CharacterFormat.TextColor = Color.Gray
+                except:
+                    pass
+                    
+                footer_para.AppendField("number of pages", FieldType.FieldNumPages)
+                
+                footer_para.Format.HorizontalAlignment = HorizontalAlignment.Center
+            except Exception as e:
+                print(f"Warning: Could not add footer: {e}")
+
             # Process paragraphs in the current section
             para_count = section.Paragraphs.Count
             for j in range(para_count):

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MountainIcon, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { SearchForm } from './search-form';
 import { Button } from './ui/button';
 import { useTheme } from 'next-themes';
