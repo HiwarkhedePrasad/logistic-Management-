@@ -54,7 +54,7 @@ export const columns: ColumnDef<Report>[] = [
 
         // If it's a local file URL or Supabase storage upload failed, use the backend download API
         if (url.startsWith('file://')) {
-          const filename = url.split('/').pop() || url.split('\\').pop();
+          const filename = url.split(/[/\\]/).filter(Boolean).pop();
           if (filename) {
             url = `http://localhost:8000/api/reports/download/${filename}`;
           }
